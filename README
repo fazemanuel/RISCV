@@ -1,49 +1,117 @@
-xv6 is a re-implementation of Dennis Ritchie's and Ken Thompson's Unix
-Version 6 (v6).  xv6 loosely follows the structure and style of v6,
-but is implemented for a modern RISC-V multiprocessor using ANSI C.
+README.md 
+xv6-riscv — Explicación 
 
-ACKNOWLEDGMENTS
+Aviso de origen
+Este repositorio contiene el código original de xv6-riscv (MIT) con comentarios y documentación añadidos en español para explicar su funcionamiento interno. El código base pertenece al proyecto xv6; revisa la licencia incluida por el MIT.
 
-xv6 is inspired by John Lions's Commentary on UNIX 6th Edition (Peer
-to Peer Communications; ISBN: 1-57398-013-7; 1st edition (June 14,
-2000)).  See also https://pdos.csail.mit.edu/6.1810/, which provides
-pointers to on-line resources for v6.
+Nota sobre esta versión
+Las partes que explican el planificador de CPU y la gestión de memoria están documentadas en español dentro del código, añadiendo comentarios aclaratorios directamente sobre las funciones relevantes (sin modificar la lógica del kernel).
 
-The following people have made contributions: Russ Cox (context switching,
-locking), Cliff Frey (MP), Xiao Yu (MP), Nickolai Zeldovich, and Austin
-Clements.
+Propósito de este README
 
-We are also grateful for the bug reports and patches contributed by
-Takahiro Aoyagi, Silas Boyd-Wickizer, Anton Burtsev, carlclone, Ian
-Chen, Dan Cross, Cody Cutler, Mike CAT, Tej Chajed, Asami Doi,
-eyalz800, Nelson Elhage, Saar Ettinger, Alice Ferrazzi, Nathaniel
-Filardo, flespark, Peter Froehlich, Yakir Goaron, Shivam Handa, Matt
-Harvey, Bryan Henry, jaichenhengjie, Jim Huang, Matúš Jókay, John
-Jolly, Alexander Kapshuk, Anders Kaseorg, kehao95, Wolfgang Keller,
-Jungwoo Kim, Jonathan Kimmitt, Eddie Kohler, Vadim Kolontsov, Austin
-Liew, l0stman, Pavan Maddamsetti, Imbar Marinescu, Yandong Mao, Matan
-Shabtay, Hitoshi Mitake, Carmi Merimovich, Mark Morrissey, mtasm, Joel
-Nider, Hayato Ohhashi, OptimisticSide, Harry Porter, Greg Price, Jude
-Rich, segfault, Ayan Shafqat, Eldar Sehayek, Yongming Shen, Fumiya
-Shigemitsu, Cam Tenny, tyfkda, Warren Toomey, Stephen Tu, Rafael Ubal,
-Amane Uehara, Pablo Ventura, Xi Wang, WaheedHafez, Keiichi Watanabe,
-Nicolas Wolovick, wxdao, Grant Wu, Jindong Zhang, Icenowy Zheng,
-ZhUyU1997, and Zou Chang Wei.
+Presenta una explicación general del funcionamiento del planificador de CPU y la gestión de memoria, e indica precisamente en qué archivos del proyecto se encuentran las implementaciones. Esto sirve de mapa para navegar el código.
 
+1. Planificador de CPU (scheduler)
+Funcionamiento general
 
-The code in the files that constitute xv6 is
-Copyright 2006-2022 Frans Kaashoek, Robert Morris, and Russ Cox.
+El scheduler recorre procesos en estado RUNNABLE y les da tiempo de CPU mediante conmutación de contexto. Es un planificador simple tipo round-robin adecuado para un kernel educativo.
 
-ERROR REPORTS
+Archivos donde encontrar el scheduler
 
-Please send errors and suggestions to Frans Kaashoek and Robert Morris
-(kaashoek,rtm@mit.edu).  The main purpose of xv6 is as a teaching
-operating system for MIT's 6.1810, so we are more interested in
-simplifications and clarifications than new features.
+Para estudiar y comprender el planificador revisa los siguientes archivos:
 
-BUILDING AND RUNNING XV6
+kernel/proc.c
+Aquí está:
 
-You will need a RISC-V "newlib" tool chain from
-https://github.com/riscv/riscv-gnu-toolchain, and qemu compiled for
-riscv64-softmmu.  Once they are installed, and in your shell
-search path, you can run "make qemu".
+scheduler() — bucle principal del planificador por CPU.
+
+yield() — permite que un proceso ceda la CPU.
+
+sleep() y wakeup() — mecanismos de espera y notificación.
+
+fork(), exit(), wait() — creación/destrucción de procesos y transición de estados.
+
+allocproc() — creación de estructuras struct proc.
+
+kernel/swtch.S
+Implementa el context switch a nivel de ensamblador: guarda y restaura registros del contexto de un proceso.
+
+kernel/spinlock.c
+Código relacionado con la sincronización usada por el scheduler para evitar condiciones de carrera.
+
+kernel/trap.c
+Las interrupciones de timer vuelven eventualmente al scheduler marcando necesidad de ceder CPU.
+
+Breve idea de funcionamiento
+
+scheduler() recorre el arreglo global de procesos, elige el primero RUNNABLE, lo marca como RUNNING, realiza un cambio de contexto a su pila del kernel y lo deja ejecutar hasta que regrese al scheduler (por yield, sleep, exit, interrupción, etc.).
+
+Las secciones relevantes dentro de proc.c ya están comentadas en español en esta versión del repositorio.
+
+2. Gestión de memoria
+
+La memoria en xv6 se divide conceptualmente en dos subsistemas:
+a) asignación de páginas físicas y
+b) gestión del espacio de direcciones de usuario mediante tablas de páginas.
+
+Archivos donde encontrar la gestión de memoria
+
+kernel/kalloc.c
+Implementación del asignador físico de páginas:
+
+kalloc() — entrega páginas físicas libres.
+
+kfree() — devuelve páginas a la lista libre.
+
+Lista enlazada de páginas disponibles.
+
+kernel/vm.c
+(Nombre puede variar según versión: a veces vm.c, vm.rs, etc.)
+Contiene casi toda la lógica de memoria virtual:
+
+walk() — localizar/crear PTEs en la tabla de páginas.
+
+mappages() — mapear rangos virtuales→físicos.
+
+uvmalloc, uvmfree, uvmdealloc — crecimiento y destrucción del espacio de direcciones.
+
+copyout y copyin — transferencias seguras entre kernel y usuario.
+
+kernel/exec.c
+
+Carga de ejecutables ELF.
+
+Construcción de una nueva tabla de páginas para el proceso.
+
+Reserva y mapeo de memoria inicial del programa.
+
+kernel/proc.c
+fork() utiliza funciones de vm.c para copiar el espacio de direcciones del padre al hijo (en xv6 clásico no hay copy-on-write).
+También aquí se libera memoria de procesos terminados.
+
+Cómo funciona cada parte
+
+La explicación se mantiene igual a la versión previa, pero se aclara dónde está implementado:
+
+El asignador físico (kalloc.c) maneja páginas individuales mediante free-lists.
+Las tablas de páginas (vm.c) traducen direcciones virtuales→físicas usando el esquema de paginación Sv39 de RISC-V.
+exec.c construye el espacio de direcciones inicial.
+proc.c coordina asignación y liberación durante creación/terminación de procesos.
+
+Todas estas secciones contienen comentarios en español en esta versión del repositorio, explicando las funciones clave.
+
+3. Resumen práctico — dónde mirar primero
+
+Para estudiar el scheduler:
+revisa proc.c, sección scheduler(), más yield, sleep, wakeup.
+
+Para estudiar memoria:
+primero kalloc.c (páginas físicas),
+luego vm.c (paginación y mapeo),
+y finalmente exec.c y fork en proc.c.
+
+Esta versión del repositorio añade comentarios en español directamente sobre esas funciones.
+
+4. Licencia y atribución
+
+Este README y los comentarios explicativos están en español, pero todo el código base pertenece al proyecto xv6-riscv del MIT, con su licencia original incluida sin modificaciones.
